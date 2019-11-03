@@ -1,0 +1,19 @@
+language: cpp
+os: linux
+dist: bionic
+
+script:
+  - cd build && rm -rf *
+  - cmake -DCMAKE_BUILD_TYPE=Release -DULOCAL_TESTS=ON -DULOCAL_EXAMPLES=ON ..
+  - cmake --build . --target install -- -j
+  - ./tests/unit/ulocal_unit_tests
+  - cd .. && ./run_integration_tests.sh
+
+branches:
+  only:
+    - master
+    - /^v?\d+\.\d+.*$/
+
+notifications:
+  email:
+    on_success: never
