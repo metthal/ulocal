@@ -2,7 +2,7 @@
 
 #include <ulocal/ulocal.hpp>
 
-#include <json.hpp>
+#include "json.hpp"
 
 using namespace ulocal;
 using json = nlohmann::json;
