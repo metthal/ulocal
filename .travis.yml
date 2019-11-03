@@ -1,6 +1,8 @@
 language: cpp
 os: linux
 dist: bionic
+install:
+  - sudo apt-get install -y python3-pip
 
 script:
   - mkdir build && cd build
