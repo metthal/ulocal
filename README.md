@@ -1,5 +1,7 @@
 # ulocal
 
+[![Build Status](https://travis-ci.org/metthal/ulocal.svg?branch=master)](https://travis-ci.org/metthal/ulocal)
+
 ulocal is small header-only C++17 library without any third party dependencies providing HTTP API over unix domain sockets.
 
 Usual way to manage and communicate with daemon applications is through IPC (inter-process communication) mechanism from userspace through some interface.
