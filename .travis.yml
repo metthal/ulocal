@@ -4,7 +4,7 @@ dist: bionic
 
 script:
   - mkdir build && cd build
-  - cmake -DCMAKE_BUILD_TYPE=Release -DULOCAL_TESTS=ON -DULOCAL_EXAMPLES=ON ..
+  - cmake -DCMAKE_BUILD_TYPE=Release -DULOCAL_TESTS=ON -DULOCAL_EXAMPLES=ON -DCMAKE_INSTALL_PREFIX=../install ..
   - cmake --build . --target install -- -j
   - ./tests/unit/ulocal_unit_tests
   - cd .. && ./run_integration_tests.sh
