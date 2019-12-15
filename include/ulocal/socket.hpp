@@ -12,6 +12,32 @@
 
 namespace ulocal {
 
+struct Network
+{
+	static ssize_t read(int fd, void* buf, size_t len)
+	{
+		return ::recv(fd, buf, len, 0);
+	}
+
+	static ssize_t write(int fd, const void* buf, size_t len)
+	{
+		return ::send(fd, buf, len, 0);
+	}
+};
+
+struct NonNetwork
+{
+	static ssize_t read(int fd, void* buf, size_t len)
+	{
+		return ::read(fd, buf, len);
+	}
+
+	static ssize_t write(int fd, const void* buf, size_t len)
+	{
+		return ::write(fd, buf, len);
+	}
+};
+
 class SocketError : public std::exception
 {
 public:
@@ -23,6 +49,7 @@ private:
 	const char* _msg;
 };
 
+template <typename SocketOp = Network>
 class Socket
 {
 public:
@@ -100,7 +127,7 @@ public:
 
 		do
 		{
-			n = ::read(_fd, _stream.get_writable_buffer(), _stream.get_writable_size());
+			n = SocketOp::read(_fd, _stream.get_writable_buffer(), _stream.get_writable_size());
 			if (n < 0)
 			{
 				if (errno == EWOULDBLOCK)
@@ -119,7 +146,7 @@ public:
 		std::size_t sent = 0;
 		while (sent < str.length())
 		{
-			auto n = ::send(_fd, str.data() + sent, str.length() - sent, 0);
+			auto n = SocketOp::write(_fd, str.data() + sent, str.length() - sent);
 			if (n < 0)
 			{
 				if (errno == EWOULDBLOCK)

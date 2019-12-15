@@ -10,6 +10,7 @@
 #include <ulocal/http_connection.hpp>
 #include <ulocal/http_request.hpp>
 #include <ulocal/http_response.hpp>
+#include <ulocal/pipe.hpp>
 #include <ulocal/route_table.hpp>
 #include <ulocal/socket.hpp>
 
@@ -21,7 +22,7 @@ public:
 	using RequestCallback = std::function<HttpResponse(const HttpRequest&)>;
 
 	HttpServer(const std::string& local_socket_path)
-		: _routes(), _local_socket_path(local_socket_path), _server(), _clients(), _thread(), _terminate(false) {}
+		: _routes(), _local_socket_path(local_socket_path), _server(), _clients(), _thread(), _control_pipe() {}
 
 	template <typename Fn>
 	void endpoint(const std::initializer_list<std::string>& methods, const std::string& route, const Fn& fn)
@@ -34,21 +35,34 @@ public:
 		_server.listen(_local_socket_path);
 
 		_thread = std::thread([this]() {
-			while (!_terminate)
+			bool running = true;
+			while (running)
 			{
 				std::vector<pollfd> poll_fds;
 				poll_fds.reserve(_clients.size() + 1);
 				for (const auto& connection : _clients)
 					poll_fds.push_back(create_pollfd(connection.get_socket()));
 				poll_fds.push_back(create_pollfd(_server));
+				poll_fds.push_back(create_pollfd(*_control_pipe.get_read_socket()));
 
-				auto result = ::poll(poll_fds.data(), poll_fds.size(), 1000);
+				auto* server_pollfd = &poll_fds[poll_fds.size() - 2];
+				auto* control_pipe_pollfd = &poll_fds[poll_fds.size() - 1];
+
+				auto result = ::poll(poll_fds.data(), poll_fds.size(), -1);
 				if (result == -1)
 					throw SocketError("Failed while polling HTTP connections");
 				else if (result == 0)
 					continue;
 
-				if (poll_fds.back().revents & POLLIN)
+				if (control_pipe_pollfd->revents & POLLIN)
+				{
+					_control_pipe.get_read_socket()->read();
+					auto command = _control_pipe.get_read_socket()->get_stream().read_until('\0');
+					if (command.first == "stop")
+						running = false;
+				}
+
+				if (server_pollfd->revents & POLLIN)
 				{
 					auto new_client = _server.accept_connection();
 					while (new_client)
@@ -61,7 +75,7 @@ public:
 				std::size_t index = 0;
 				for (auto& connection : _clients)
 				{
-					if (index >= poll_fds.size() - 1)
+					if (index >= poll_fds.size() - 2)
 						break;
 
 					auto& poll_fd = poll_fds[index];
@@ -136,22 +150,23 @@ public:
 
 	void terminate()
 	{
-		_terminate = true;
+		_control_pipe.get_write_socket()->write("stop\0");
 	}
 
 private:
-	pollfd create_pollfd(const Socket& socket)
+	template <typename T>
+	pollfd create_pollfd(const Socket<T>& socket)
 	{
 		return {socket.get_fd(), POLLIN, 0};
 	}
 
 	RouteTable<RequestCallback> _routes;
 	std::string _local_socket_path;
-	Socket _server;
+	Socket<> _server;
 	std::vector<HttpConnection> _clients;
 
 	std::thread _thread;
-	std::atomic_bool _terminate;
+	Pipe _control_pipe;
 };
 
 } // namespace ulocal
