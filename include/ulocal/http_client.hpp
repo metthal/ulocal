@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include <poll.h>
 
@@ -95,6 +96,5 @@ public:
 private:
 	std::string _local_socket_path;
 };
-
 
 } // namespace ulocal
