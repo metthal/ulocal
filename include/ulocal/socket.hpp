@@ -3,6 +3,7 @@
 #include <string>
 
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/un.h>
@@ -87,6 +88,7 @@ public:
 
 	int get_fd() const { return _fd; }
 	StringStream& get_stream() { return _stream; }
+	pollfd get_poll_fd() const { return {_fd, POLLIN, 0}; }
 
 	bool is_closed() const { return _fd == 0; }
 

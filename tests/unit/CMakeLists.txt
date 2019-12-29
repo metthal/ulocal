@@ -1,6 +1,7 @@
 set(SOURCES
 	ulocal_tests.cpp
 	test_http_request_parser.cpp
+	test_http_response_parser.cpp
 	test_string_stream.cpp
 	test_utils.cpp
 )

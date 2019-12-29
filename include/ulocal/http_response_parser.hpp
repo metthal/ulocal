@@ -2,21 +2,19 @@
 
 #include <string>
 
-#include <ulocal/http_header_table.hpp>
-#include <ulocal/http_request.hpp>
+#include <ulocal/http_response.hpp>
 #include <ulocal/string_stream.hpp>
-#include <ulocal/url_args.hpp>
 
 namespace ulocal {
 
 namespace detail {
 
-enum class RequestState
+enum class ResponseState
 {
 	Start,
-	StatusLineMethod,
-	StatusLineResource,
 	StatusLineHttpVersion,
+	StatusLineCode,
+	StatusLineReason,
 	HeaderName,
 	HeaderValue,
 	Content
@@ -24,81 +22,79 @@ enum class RequestState
 
 } // namespace detail
 
-class HttpRequestParser
+class HttpResponseParser
 {
 public:
-	HttpRequestParser() : _state(detail::RequestState::Start) {}
-	HttpRequestParser(const HttpRequestParser&) = delete;
-	HttpRequestParser(HttpRequestParser&&) noexcept = default;
+	HttpResponseParser() : _state(detail::ResponseState::Start) {}
+	HttpResponseParser(const HttpResponseParser&) = delete;
+	HttpResponseParser(HttpResponseParser&&) noexcept = default;
 
-	HttpRequestParser& operator=(const HttpRequestParser&) = delete;
-	HttpRequestParser& operator=(HttpRequestParser&&) noexcept = default;
+	HttpResponseParser& operator=(const HttpResponseParser&) = delete;
+	HttpResponseParser& operator=(HttpResponseParser&&) noexcept = default;
 
-	std::optional<HttpRequest> parse(StringStream& stream)
+	std::optional<HttpResponse> parse(StringStream& stream)
 	{
 		bool continue_parsing = true;
 		while (continue_parsing)
 		{
 			switch (_state)
 			{
-				case detail::RequestState::Start:
-				{
-					_method.clear();
-					_resource.clear();
+				case detail::ResponseState::Start:
 					_http_version.clear();
+					_status_code.clear();
+					_reason.clear();
 					_header_name.clear();
 					_header_value.clear();
-					_headers.clear();
 					_content.clear();
+					_headers.clear();
 					_content_length = 0;
-					_state = detail::RequestState::StatusLineMethod;
+					_state = detail::ResponseState::StatusLineHttpVersion;
 					break;
-				}
-				case detail::RequestState::StatusLineMethod:
+				case detail::ResponseState::StatusLineHttpVersion:
 				{
 					auto [str, found_space] = stream.read_until(' ');
-					_method += str;
+					_http_version += str;
 					if (found_space)
 					{
-						_state = detail::RequestState::StatusLineResource;
+						_state = detail::ResponseState::StatusLineCode;
 						stream.skip(1);
 					}
 					else
 						continue_parsing = false;
 					break;
 				}
-				case detail::RequestState::StatusLineResource:
+				case detail::ResponseState::StatusLineCode:
 				{
 					auto [str, found_space] = stream.read_until(' ');
-					_resource += str;
+					_status_code += str;
 					if (found_space)
 					{
-						_state = detail::RequestState::StatusLineHttpVersion;
+						_state = detail::ResponseState::StatusLineReason;
 						stream.skip(1);
 					}
 					else
 						continue_parsing = false;
 					break;
 				}
-				case detail::RequestState::StatusLineHttpVersion:
+				case detail::ResponseState::StatusLineReason:
 				{
 					auto [str, found_newline] = stream.read_until("\r\n");
-					_http_version += str;
+					_reason += str;
 					if (found_newline)
 					{
-						_state = detail::RequestState::HeaderName;
+						_state = detail::ResponseState::HeaderName;
 						stream.skip(2);
 					}
 					else
 						continue_parsing = false;
 					break;
 				}
-				case detail::RequestState::HeaderName:
+				case detail::ResponseState::HeaderName:
 				{
 					if (stream.as_string_view(2) == "\r\n")
 					{
 						stream.skip(2);
-						_state = detail::RequestState::Content;
+						_state = detail::ResponseState::Content;
 
 						auto content_length_header = _headers.get_header("content-length");
 						if (content_length_header)
@@ -114,7 +110,7 @@ public:
 						_header_name += str;
 						if (found_colon)
 						{
-							_state = detail::RequestState::HeaderValue;
+							_state = detail::ResponseState::HeaderValue;
 							stream.skip(1);
 						}
 						else
@@ -122,13 +118,13 @@ public:
 					}
 					break;
 				}
-				case detail::RequestState::HeaderValue:
+				case detail::ResponseState::HeaderValue:
 				{
 					auto [str, found_newline] = stream.read_until("\r\n");
 					_header_value += str;
 					if (found_newline)
 					{
-						_state = detail::RequestState::HeaderName;
+						_state = detail::ResponseState::HeaderName;
 						stream.skip(2);
 						_headers.add_header(std::move(_header_name), lstrip(_header_value));
 						_header_name.clear();
@@ -138,16 +134,16 @@ public:
 						continue_parsing = false;
 					break;
 				}
-				case detail::RequestState::Content:
+				case detail::ResponseState::Content:
 				{
 					auto str = stream.read(_content_length - _content.length());
 					_content += str;
 					if (_content.length() == _content_length)
 					{
-						_state = detail::RequestState::Start;
-						return HttpRequest{
-							std::move(_method),
-							std::move(_resource),
+						_state = detail::ResponseState::Start;
+						return HttpResponse{
+							std::stoi(_status_code),
+							std::move(_reason),
 							std::move(_headers),
 							std::move(_content)
 						};
@@ -164,8 +160,8 @@ public:
 	}
 
 private:
-	detail::RequestState _state;
-	std::string _method, _resource, _http_version, _header_name, _header_value, _content;
+	detail::ResponseState _state;
+	std::string _http_version, _status_code, _reason, _header_name, _header_value, _content;
 	HttpHeaderTable _headers;
 	std::uint64_t _content_length;
 };

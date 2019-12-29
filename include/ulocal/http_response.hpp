@@ -3,30 +3,39 @@
 #include <sstream>
 #include <string>
 
-#include <ulocal/http_header_table.hpp>
+#include <ulocal/http_message.hpp>
 
 namespace ulocal {
 
-class HttpResponse
+class HttpResponse : public HttpMessage
 {
 public:
-	HttpResponse() : _status_code(200), _content() {}
-	HttpResponse(int status_code) : _status_code(status_code), _content() {}
-	HttpResponse(const std::string& content) : _status_code(200), _content(content) {}
-	HttpResponse(std::string&& content) : _status_code(200), _content(std::move(content)) {}
-	HttpResponse(int status_code, const std::string& content) : _status_code(status_code), _content(content) {}
-	HttpResponse(int status_code, std::string&& content) : _status_code(status_code), _content(std::move(content)) {}
+	HttpResponse() : HttpResponse(200) {}
+	HttpResponse(int status_code) : HttpResponse(status_code, std::string{}) {}
+	HttpResponse(const std::string& content) : HttpResponse(200, content) {}
+	HttpResponse(std::string&& content) : HttpResponse(200, std::move(content)) {}
 
-	int get_status_code() const { return _status_code; }
-	const std::string& get_content() const { return _content; }
+	template <typename Content>
+	HttpResponse(int status_code, Content&& content) : HttpResponse(status_code, std::optional<std::string>{}, HttpHeaderTable{}, std::forward<Content>(content)) {}
 
-	template <typename T1, typename T2>
-	void add_header(T1&& name, T2&& value)
+	template <typename Reason, typename Headers, typename Content>
+	HttpResponse(int status_code, Reason&& reason, Headers&& headers, Content&& content)
+		: HttpMessage(std::forward<Content>(content), std::forward<Headers>(headers))
+		, _status_code(status_code)
+		, _reason(std::forward<Reason>(reason))
 	{
-		_headers.add_header(std::forward<T1>(name), std::forward<T2>(value));
 	}
 
-	std::string dump() const
+	HttpResponse(const HttpResponse&) = default;
+	HttpResponse(HttpResponse&&) noexcept = default;
+	virtual ~HttpResponse() = default;
+
+	HttpResponse& operator=(const HttpResponse&) = default;
+	HttpResponse& operator=(HttpResponse&&) noexcept = default;
+
+	int get_status_code() const { return _status_code; }
+
+	std::string get_reason() const
 	{
 		static const std::unordered_map<int, std::string_view> status_code_names = {
 			{ 100, "Continue" },
@@ -71,15 +80,22 @@ public:
 			{ 505, "HTTP Version Not Supported" }
 		};
 
-		std::string status_name;
-		auto itr = status_code_names.find(_status_code);
-		if (itr != status_code_names.end())
-			status_name = itr->second;
+		if (_reason.has_value())
+			return _reason.value();
 		else
-			status_name = "Unknown";
+		{
+			auto itr = status_code_names.find(_status_code);
+			if (itr != status_code_names.end())
+				return std::string{itr->second};
+		}
 
+		return "Unknown";
+	}
+
+	virtual std::string dump() const override
+	{
 		std::ostringstream ss;
-		ss << "HTTP/1.1 " << _status_code << " " << status_name << "\r\n";
+		ss << "HTTP/1.1 " << _status_code << " " << get_reason() << "\r\n";
 		for (const auto* header : _headers)
 			ss << header->get_name() << ": " << header->get_value() << "\r\n";
 		ss << "\r\n";
@@ -90,8 +106,7 @@ public:
 
 private:
 	int _status_code;
-	HttpHeaderTable _headers;
-	std::string _content;
+	std::optional<std::string> _reason;
 };
 
 } // namespace ulocal

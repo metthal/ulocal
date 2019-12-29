@@ -26,6 +26,15 @@ public:
 		return _table.find(name) != _table.end();
 	}
 
+	HttpHeader* get_header(const std::string& name)
+	{
+		auto itr = _table.find(name);
+		if (itr == _table.end())
+			return nullptr;
+
+		return &itr->second;
+	}
+
 	const HttpHeader* get_header(const std::string& name) const
 	{
 		auto itr = _table.find(name);

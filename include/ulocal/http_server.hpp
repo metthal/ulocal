@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <functional>
 #include <thread>
 #include <unordered_set>
@@ -13,6 +12,7 @@
 #include <ulocal/pipe.hpp>
 #include <ulocal/route_table.hpp>
 #include <ulocal/socket.hpp>
+#include <ulocal/version.hpp>
 
 namespace ulocal {
 
@@ -22,7 +22,11 @@ public:
 	using RequestCallback = std::function<HttpResponse(const HttpRequest&)>;
 
 	HttpServer(const std::string& local_socket_path)
-		: _routes(), _local_socket_path(local_socket_path), _server(), _clients(), _thread(), _control_pipe() {}
+		: _routes(), _local_socket_path(local_socket_path), _server(), _clients(), _thread(), _control_pipe(), _server_header() {}
+	HttpServer(const std::string& local_socket_path, const std::string& server_header) : HttpServer(local_socket_path)
+	{
+		_server_header = server_header;
+	}
 
 	template <typename Fn>
 	void endpoint(const std::initializer_list<std::string>& methods, const std::string& route, const Fn& fn)
@@ -41,9 +45,9 @@ public:
 				std::vector<pollfd> poll_fds;
 				poll_fds.reserve(_clients.size() + 1);
 				for (const auto& connection : _clients)
-					poll_fds.push_back(create_pollfd(connection.get_socket()));
-				poll_fds.push_back(create_pollfd(_server));
-				poll_fds.push_back(create_pollfd(*_control_pipe.get_read_socket()));
+					poll_fds.push_back(connection.get_socket().get_poll_fd());
+				poll_fds.push_back(_server.get_poll_fd());
+				poll_fds.push_back(_control_pipe.get_read_socket()->get_poll_fd());
 
 				auto* server_pollfd = &poll_fds[poll_fds.size() - 2];
 				auto* control_pipe_pollfd = &poll_fds[poll_fds.size() - 1];
@@ -116,7 +120,12 @@ public:
 
 						if (response)
 						{
+							response->calculate_content_length();
+							if (_server_header)
+								response->add_header("Server", _server_header.value());
 							response->add_header("Connection", "close");
+							response->add_header("X-Framework", "ulocal " ULOCAL_VERSION);
+
 							try
 							{
 								connection.get_socket().write(response->dump());
@@ -154,12 +163,6 @@ public:
 	}
 
 private:
-	template <typename T>
-	pollfd create_pollfd(const Socket<T>& socket)
-	{
-		return {socket.get_fd(), POLLIN, 0};
-	}
-
 	RouteTable<RequestCallback> _routes;
 	std::string _local_socket_path;
 	Socket<> _server;
@@ -167,6 +170,8 @@ private:
 
 	std::thread _thread;
 	Pipe _control_pipe;
+
+	std::optional<std::string> _server_header;
 };
 
 } // namespace ulocal

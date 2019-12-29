@@ -20,6 +20,26 @@ inline char nibbles_to_char(char high, char low)
 	return (hex_to_nibble(high) << 4) | hex_to_nibble(low);
 }
 
+inline char char_to_hex(char c, bool high)
+{
+	c = high ? ((c >> 4) & 0x0F) : (c & 0x0F);
+	if (0 <= c && c <= 9)
+		return c + '0';
+	else
+		return c - 10 + 'a';
+}
+
+inline char char_to_hex_high(char c) { return char_to_hex(c, true); }
+inline char char_to_hex_low(char c) { return char_to_hex(c, false); }
+
+inline std::string char_to_hex(char c)
+{
+	std::string result(2, 0);
+	result[0] = char_to_hex_high(c);
+	result[1] = char_to_hex_low(c);
+	return result;
+}
+
 template <typename StrT>
 std::string url_decode(const StrT& str)
 {
@@ -51,11 +71,49 @@ std::string url_decode(const StrT& str)
 	return result;
 }
 
+template <typename StrT>
+std::string url_encode(const StrT& str)
+{
+	std::string result;
+	result.reserve(2 * str.length());
+
+	for (char c : str)
+	{
+		if (('a' <= c && c <= 'z') ||
+			('A' <= c && c <= 'Z') ||
+			('0' <= c && c <= '9') ||
+			c == '-' ||
+			c == '_' ||
+			c == '~' ||
+			c == '.')
+		{
+			result += c;
+		}
+		else
+		{
+			result += '%' + char_to_hex(c);
+		}
+	}
+
+	return result;
+}
+
 template <class T>
 inline void hash_combine(std::size_t& seed, const T& v)
 {
 	std::hash<T> hasher;
 	seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+
+template <typename StrT>
+std::string lowercase(const StrT& str)
+{
+	std::string result;
+	result.reserve(size(str));
+	std::transform(begin(str), end(str), begin(result), [](char c) {
+		return std::tolower(c);
+	});
+	return result;
 }
 
 template <typename StrT1, typename StrT2>
