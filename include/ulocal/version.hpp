@@ -1,3 +1,3 @@
 #pragma once
 
-#define ULOCAL_VERSION "0.1.1"
+#define ULOCAL_VERSION "0.2.0"
