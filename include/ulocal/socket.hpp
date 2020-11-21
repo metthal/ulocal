@@ -92,6 +92,15 @@ public:
 
 	bool is_closed() const { return _fd == 0; }
 
+	bool is_listening() const
+	{
+		int result;
+		socklen_t len = sizeof(result);
+		if (::getsockopt(_fd, SOL_SOCKET, SO_ACCEPTCONN, &result, &len) == -1)
+			return false;
+		return result > 0;
+	}
+
 	void connect(const std::string& file_path)
 	{
 		auto sa = create_sockaddr(file_path);

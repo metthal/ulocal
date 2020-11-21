@@ -279,6 +279,27 @@ def test_non_existing_endpoint(ulocal_server):
     assert response.status_code == 404
 
 
+def test_different_handlers_for_different_methods(ulocal_server):
+    response1 = send_json(
+        ulocal_server,
+        'GET',
+        '/different_handlers_for_different_methods',
+        {}
+    )
+    response2 = send_json(
+        ulocal_server,
+        'POST',
+        '/different_handlers_for_different_methods',
+        {}
+    )
+    print(response2.reason)
+    print(response2.headers)
+    print(response2.content)
+
+    assert response1.status_code == 200
+    assert response2.status_code == 500
+
+
 def test_multiple_requests_one_session(ulocal_server):
     session = requests_unixsocket.Session()
 

@@ -13,13 +13,18 @@ class RouteTable
 public:
 	RouteTable() : _table() {}
 
-	const Endpoint<Callback>* has_route(const std::string& route)
+	bool has_route(const std::string& route) const
 	{
-		auto itr = _table.find(route);
-		if (itr == _table.end())
-			return nullptr;
+		return _table.find(route) != _table.end();
+	}
 
-		return &itr->second;
+	bool has_route_for_method(const std::string& route, const std::string& method) const
+	{
+		auto route_itr = _table.find(route);
+		if (route_itr == _table.end())
+			return false;
+
+		return route_itr->second.find(method) != route_itr->second.end();
 	}
 
 	template <typename R, typename M, typename C>
@@ -27,11 +32,29 @@ public:
 	{
 		auto itr = _table.find(route);
 		if (itr == _table.end())
-			_table.emplace(route, Endpoint<Callback>{route, std::forward<M>(methods), std::forward<C>(callback)});
+			std::tie(itr, std::ignore) = _table.emplace(route, MethodTable{});
+
+		auto& method_table = itr->second;
+		for (const auto& method : methods)
+		{
+			auto method_itr = method_table.find(method);
+			if (method_itr == method_table.end())
+				method_table.emplace(method, callback);
+			else
+				method_itr->second = callback;
+		}
+	}
+
+	template <typename... Args>
+	auto perform_action(const std::string& route, const std::string& method, Args&&... args) const
+	{
+		return _table.at(route).at(method)(std::forward<Args>(args)...);
 	}
 
 private:
-	std::unordered_map<std::string, Endpoint<Callback>, CaseInsensitiveHash, CaseInsensitiveCompare> _table;
+	using MethodTable = std::unordered_map<std::string, Callback, CaseInsensitiveHash, CaseInsensitiveCompare>;
+
+	std::unordered_map<std::string, MethodTable, CaseInsensitiveHash, CaseInsensitiveCompare> _table;
 };
 
 } // namespace ulocal

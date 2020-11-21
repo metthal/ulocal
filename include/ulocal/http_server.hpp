@@ -34,6 +34,11 @@ public:
 		_routes.add_route(route, methods, fn);
 	}
 
+	bool is_serving() const
+	{
+		return _server.is_listening();
+	}
+
 	void serve()
 	{
 		_server.listen(_local_socket_path);
@@ -100,16 +105,15 @@ public:
 						if (maybe_request)
 						{
 							auto request = std::move(maybe_request).value();
-							auto endpoint = _routes.has_route(request.get_resource());
-							if (!endpoint)
+							if (!_routes.has_route(request.get_resource()))
 								response = HttpResponse{404};
-							else if (!endpoint->supports_method(request.get_method()))
+							else if (!_routes.has_route_for_method(request.get_resource(), request.get_method()))
 								response = HttpResponse{405};
 							else
 							{
 								try
 								{
-									response = endpoint->perform(request);
+									response = _routes.perform_action(request.get_resource(), request.get_method(), request);
 								}
 								catch (const std::exception& err)
 								{

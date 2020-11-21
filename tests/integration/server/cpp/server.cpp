@@ -50,6 +50,11 @@ int main(int argc, char* argv[])
 	server.endpoint({"GET"}, "/error/500", [&](const HttpRequest&) -> HttpResponse {
 		return 500;
 	});
+	server.endpoint({"GET"}, "/different_handlers_for_different_methods", ok_handler);
+	server.endpoint({"POST"}, "/different_handlers_for_different_methods", [&](const HttpRequest&) -> HttpResponse {
+		return 500;
+	});
+
 	server.serve();
 
 	while (!terminate)
